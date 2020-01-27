@@ -206,6 +206,283 @@ func main()  {
 }
 ```
 
+函数是第一类型，可作为参数或返回值。
+
+```go
+// func_closure.go
+package main
+
+func test(x int) func()  {  // 返回函数类型
+	return func() { // 匿名函数
+		println(x)  // 闭包
+	}
+}
+
+func main()  {
+	x := 100
+	f := test(x)
+	f()
+}
+```
+
+使用defer定义延迟调用，无论函数是否出错，它都确保结束前被调用。
+
+```go
+// defer_call_func.go
+package main
+
+func test(a, b int)  {
+	defer println("dispose...")
+
+	println(a / b)
+}
+
+func main()  {
+	test(10, 0)
+}
+
+->
+[root@jesse section1]# go run defer_call_func.go 
+dispose...
+panic: runtime error: integer divide by zero
+```
+
+### 数据
+
+切片（slice）可实现类似动态数组的功能。
+
+```go
+// data_slice.go
+
+package main
+
+import (
+	"fmt"
+)
+
+func main()  {
+	x := make([]int, 0, 5)  // 创建容量为5的切片（此时为空）
+	fmt.Println(x)
+	for i := 0; i < 8; i++ {
+		x = append(x, i)  // 追加数据，当超出容量限制时，自动分配更大的存储空间
+	}
+
+	fmt.Println(x)
+}
+```
+
+将字典（map）类型内置，可直接从运行时层面获得性能优化。
+
+```go
+// data_dict.go
+package main
+
+import (
+	"fmt"
+)
+
+func main()  {
+	m := make(map[string]int)  // 创建字典类型对象
+
+	m["a"] = 1  // 添加或设置
+
+	x, ok := m["b"] // 使用ok-idiom获取值，可知道key/value是否存在
+	fmt.Println(x, ok)
+
+	delete(m, "a")  // 删除
+}
+```
+
+*所谓ok-idiom模式，是指在多返回值中用一个名为ok的布尔值来标示操作是否成功。因为很多操作默认返回零值，所以须额外说明。*
+
+结构体（struct）可匿名嵌入其他类型。
+
+```go
+// struct_type.go
+
+package main
+
+import (
+	"fmt"
+)
+
+type user struct {  // 结构体类型
+	name string
+	age byte
+}
+
+type manager struct {
+	user  // 匿名嵌入其他类型
+	title string
+}
+
+func main()  {
+	var m manager
+
+	m.name = "Tom"
+	m.age = 29
+	m.title = "CTO"
+
+	fmt.Println(m)
+}
+```
+
+### 方法
+
+可以为当前包内的任意类型定义方法
+
+```go
+// defined_other_func.go
+
+package main
+
+// X defined int type.
+type X int
+
+func (x *X) inc()  {  // 名称前的参数称作receiver，作用类似python self
+	*x++
+}
+
+func main()  {
+	var x X
+	x.inc()
+	print(x)
+}
+-> 无输出
+```
+
+通过直接调用匿名字段的方法，实现与继承类似的功能。
+
+```go
+// anonymous_to_inherit.go
+package main
+
+import "fmt"
+
+type user struct {
+	name string
+	age byte
+}
+
+func (u user) ToString() string  {
+	return fmt.Sprintf("%+v", u)
+}
+
+type manager struct {
+	user
+	title string
+}
+
+func main()  {
+	var m manager
+	m.name = "Tom"
+	m.age = 29
+
+	println(m.ToString())  // 调用user.ToString()
+}
+```
+
+### 接口
+
+接口采用了duck type（鸭子类型）方式，也就是说无须在实现类型上添加显式声明。
+
+```go
+// interface_duck_type.go
+
+package main
+
+import (
+	"fmt"
+)
+
+type user struct {
+	name string
+	age byte
+}
+
+func (u user) Print()  {
+	fmt.Printf("%+v\n", u)
+}
+
+type Printer interface {  // 接口类型
+	Print()
+}
+
+func main()  {
+	var u user
+	u.name = "Tom"
+	u.age = 29
+
+	var p Printer = u  // 只要包含接口所需的全部方法，即表示实现了该接口
+	p.Print()
+}
+```
+
+### 并发
+
+整个运行时完全并发化设计。凡是你能看到的，几乎都在以goroutine方式运行。这是一种比普通协程或线程更加高效的并发设计，能轻松创建和运行成千上万的并发任务。
+
+```go
+// concurrent_goroutine.go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func task(id int)  {
+	for i := 0; i < 5; i++ {
+		fmt.Printf("%d: %d\n", id, i)
+		time.Sleep(time.Second)
+	}
+}
+
+func main()  {
+	go task(1)  // 创建goroutine
+	go task(2)
+	go task(3)
+
+	time.Sleep(time.Second * 6)
+}
+```
+
+通道（channel）与goroutine搭配，实现用通信代替内存共享的CSP模型。
+
+```go
+// channel_goroutine.go
+
+package main
+
+// 消费者
+func consumer(data chan int, done chan bool) {
+	for x := range data {  // 接收数据，直到通道被关闭
+		println("recv:", x)
+	}
+
+	done <- true  // 通知main，消费结束
+}
+
+// 生产者
+func producer(data chan int)  {
+	for i := 0; i < 4; i++ {
+		data <- i  // 发送数据
+	}
+
+	close(data)  // 生产结束，关闭通道
+}
+
+func main()  {
+	done := make(chan bool)  // 用于接收消费结束信号
+	data := make(chan int)  // 数据管道
+
+	go consumer(data, done)  // 启动消费者
+	go producer(data)  // 启动消费者
+
+	<- done  // 阻塞，直到消费者发回结束信号
+}
+```
+
 ## 第二章 类型
 
 从计算机系统的角度看，变量是一段或多段用来存储数据的内存。
