@@ -1,3 +1,8 @@
+# gin_note
+
+## 简单示例
+
+```golang
 package main
 
 import "github.com/gin-gonic/gin"
@@ -11,3 +16,4 @@ func main() {
 	})
 	router.Run()
 }
+```
